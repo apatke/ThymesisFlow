@@ -107,7 +107,7 @@ reg         pongdata1_valid;
 
 reg output_turn;//used for bonding.
 
-wire next_cmd_interface_id;//used for determining next interface
+wire next_cmd_interface_id;//used fozr determining next interface
 
 wire ping_pong_ready0;
 wire ping_pong_ready1;
@@ -115,18 +115,18 @@ wire ping_pong_ready1;
 //OpenCAPI main state machine
 
 wire   is_writecmd;
-assign is_writecmd = egr_route_in_tdata[509];
+assign is_writecmd = egr_route_in_tdata_s0[509];
 
 wire   is_respRok;
-assign is_respRok  = ((egr_route_in_tdata[506] == 1'b1) && (egr_route_in_tdata[504] == 1'b0));
+assign is_respRok  = ((egr_route_in_tdata_s0[506] == 1'b1) && (egr_route_in_tdata_s0[504] == 1'b0));
 
 //TLCmd
 wire [1:0] cmd_dl;
-assign cmd_dl  = egr_route_in_tdata[423:422]; //according to the mapping
+assign cmd_dl  = egr_route_in_tdata_s0[423:422]; //according to the mapping
 
 //TLResp
 wire [1:0] resp_dl;
-assign resp_dl = egr_route_in_tdata[483:482];
+assign resp_dl = egr_route_in_tdata_s0[483:482];
 
 
 reg  [1:0] ocapi_sm;
@@ -161,11 +161,20 @@ wire is_data0_low_p1;
 wire is_data1_high_p1;
 wire is_data1_low_p1; 
 
+wire [511:0] egr_route_in_tdata_s0;
+wire egr_route_in_tvalid_s0;
+wire egr_route_in_tready_s0;
+
+assign egr_route_in_tdata_s0 = egr_route_in_tdata;
+assign egr_route_in_tvalid_s0 = egr_route_in_tvalid;
+assign egr_route_in_tready = egr_route_in_tready_s0;
+
+
 
 //Determine which is the next interface and what type of opencapi flit is expected next. 
 //If ping pong buffer is ready the previous flits should get propagated unless a downsize stall
 //happens for dataflits (i.e. conversion of 1x64B -> 2x32B)
-assign egr_route_in_tready = ((next_cmd_interface_id ==  1'b0) && (input_is_cmd == 1'b1) &&  //next interface0 this is a command and it can be consumed
+assign egr_route_in_tready_s0 = ((next_cmd_interface_id ==  1'b0) && (input_is_cmd == 1'b1) &&  //next interface0 this is a command and it can be consumed
                                                     ((cmdflit0_vld == 1'b0) ||  ((is_cmd_p0 == 1'b1) && (ping_pong_ready0 == 1'b1)))  
                              ) ||
                              ((next_cmd_interface_id ==  1'b1) && (input_is_cmd == 1'b1) &&  //next interface1 this is a command and it can be consumed
@@ -197,7 +206,7 @@ begin
     case (ocapi_sm) 
        INPUT_CMD_RESP:                                   
 	    begin
-              if ((egr_route_in_tready == 1'b1) && (egr_route_in_tvalid == 1'b1) && //if the cmd is 128B write or Read resp OK there is special handling.
+              if ((egr_route_in_tready_s0 == 1'b1) && (egr_route_in_tvalid_s0 == 1'b1) && //if the cmd is 128B write or Read resp OK there is special handling.
                                                ((is_writecmd == 1'b1) || (is_respRok == 1'b1))
                  ) //Commands with dataflits
                 begin
@@ -210,7 +219,7 @@ begin
             end
 	INPUT_DATAFLIT:
             begin  
-              if ((egr_route_in_tready == 1'b1) && (egr_route_in_tvalid == 1'b1)) 
+              if ((egr_route_in_tready_s0 == 1'b1) && (egr_route_in_tvalid_s0 == 1'b1)) 
                 begin
                    dflit_size         <= dflit_size - 3'b001;   
                    ocapi_sm           <= (dflit_size == 3'b001)? INPUT_CMD_RESP : INPUT_DATAFLIT;      //next at input is  cmd0   
@@ -227,7 +236,7 @@ begin
     begin
       output_turn <= 1'b0;
     end
-   else if ((egr_route_in_tready == 1'b1) && (egr_route_in_tvalid == 1'b1) && (input_is_cmd == 1'b1))
+   else if ((egr_route_in_tready_s0 == 1'b1) && (egr_route_in_tvalid_s0 == 1'b1) && (input_is_cmd == 1'b1))
     begin
           output_turn <=  ~output_turn;
     end
@@ -235,7 +244,7 @@ end
 
 //needs revisit as it only considers only 2 interfaces (which are available on the AD9V3 card)
 //output turn is selected for channel bonding and if this is not the case, if outport0 is not selected we assume 1 is.
-assign next_cmd_interface_id = (( egr_route_in_tdata[`OCX_SELECT_PORT0] == 1'b1) && ( egr_route_in_tdata[`OCX_SELECT_PORT1] == 1'b1)) ? output_turn : ~egr_route_in_tdata[`OCX_SELECT_PORT0];
+assign next_cmd_interface_id = (( egr_route_in_tdata_s0[`OCX_SELECT_PORT0] == 1'b1) && ( egr_route_in_tdata_s0[`OCX_SELECT_PORT1] == 1'b1)) ? output_turn : ~egr_route_in_tdata_s0[`OCX_SELECT_PORT0];
 
 //Processes that pull data from stage 1 to ping pong buffer.
 
@@ -249,13 +258,13 @@ begin
      end
    else if ((next_cmd_interface_id ==  1'b0) && //0 is the next interface 
             (input_is_cmd == 1'b1) &&           //first stage input is cmd
-            (egr_route_in_tvalid == 1'b1) &&    //there is a cmd at the first stage input
+            (egr_route_in_tvalid_s0 == 1'b1) &&    //there is a cmd at the first stage input
             ( (cmdflit0_vld == 1'b0) ||        //first stage is empty or second stage is pulling the other flit in this cycle.
                    ((ping_pong_ready0 == 1'b1) && (is_cmd_p0 == 1'b1)) 
             )                      
            )
      begin
-        cmdflit0_q   <= egr_route_in_tdata[511:256]; 
+        cmdflit0_q   <= egr_route_in_tdata_s0[511:256]; 
         cmdflit0_vld <= 1'b1;
      end
    else if ((cmdflit0_vld == 1'b1) && (is_cmd_p0 == 1'b1) && (ping_pong_ready0 == 1'b1))
@@ -274,13 +283,13 @@ begin
      end
    else if ((next_data_interface_id ==  1'b0) && //0 is the next interface 
             (input_is_data0 == 1'b1) &&         //first stage input is dataflit0
-            (egr_route_in_tvalid == 1'b1) &&    //there is a dataflit at the first stage input
+            (egr_route_in_tvalid_s0 == 1'b1) &&    //there is a dataflit at the first stage input
             ( (dataflit00h_vld == 1'b0) ||        //first stage is empty or second stage is pulling the lower flit in this cycle.
                  ((ping_pong_ready0 == 1'b1) && (is_data0_high_p0 == 1'b1)) 
             )                      
            )
      begin
-        dataflit00h_q   <= egr_route_in_tdata[511:256]; 
+        dataflit00h_q   <= egr_route_in_tdata_s0[511:256]; 
         dataflit00h_vld <= 1'b1;
      end
    else if ((dataflit00h_vld == 1'b1) && (is_data0_high_p0 == 1'b1) && (ping_pong_ready0 == 1'b1))
@@ -299,13 +308,13 @@ begin
      end
    else if ((next_data_interface_id ==  1'b0) && //0 is the next interface 
             (input_is_data0 == 1'b1) &&         //first stage input is dataflit0
-            (egr_route_in_tvalid == 1'b1) &&    //there is a dataflit at the first stage input
+            (egr_route_in_tvalid_s0 == 1'b1) &&    //there is a dataflit at the first stage input
             ( (dataflit00l_vld == 1'b0) ||        //first stage is empty or second stage is pulling the lower flit in this cycle.
                  ((ping_pong_ready0 == 1'b1) && (is_data0_low_p0 == 1'b1)) 
             )                      
            )
      begin
-        dataflit00l_q   <= egr_route_in_tdata[255:0]; 
+        dataflit00l_q   <= egr_route_in_tdata_s0[255:0]; 
         dataflit00l_vld <= 1'b1;
      end
    else if ((dataflit00l_vld == 1'b1) && (is_data0_low_p0 == 1'b1) && (ping_pong_ready0 == 1'b1))
@@ -324,13 +333,13 @@ begin
      end
    else if ((next_data_interface_id ==  1'b0) && //0 is the next interface 
             (input_is_data1 == 1'b1) &&         //first stage input is dataflit0
-            (egr_route_in_tvalid == 1'b1) &&    //there is a dataflit at the first stage input
+            (egr_route_in_tvalid_s0 == 1'b1) &&    //there is a dataflit at the first stage input
             ( (dataflit01h_vld == 1'b0) ||        //first stage is empty or second stage is pulling the lower flit in this cycle.
                  ((ping_pong_ready0 == 1'b1) && (is_data1_high_p0 == 1'b1)) 
             )                      
            )
      begin
-        dataflit01h_q   <= egr_route_in_tdata[511:256]; 
+        dataflit01h_q   <= egr_route_in_tdata_s0[511:256]; 
         dataflit01h_vld <= 1'b1;
      end
    else if ((dataflit01h_vld == 1'b1) && (is_data1_high_p0 == 1'b1) && (ping_pong_ready0 == 1'b1))
@@ -349,13 +358,13 @@ begin
      end
    else if ((next_data_interface_id ==  1'b0) && //0 is the next interface 
             (input_is_data1 == 1'b1) &&         //first stage input is dataflit0
-            (egr_route_in_tvalid == 1'b1) &&    //there is a dataflit at the first stage input
+            (egr_route_in_tvalid_s0 == 1'b1) &&    //there is a dataflit at the first stage input
             ( (dataflit01l_vld == 1'b0) ||        //first stage is empty or second stage is pulling the lower flit in this cycle.
                  ((ping_pong_ready0 == 1'b1) && (is_data1_low_p0 == 1'b1)) 
             )                      
            )
      begin
-        dataflit01l_q   <= egr_route_in_tdata[255:0]; 
+        dataflit01l_q   <= egr_route_in_tdata_s0[255:0]; 
         dataflit01l_vld <= 1'b1;
      end
    else if ((dataflit01l_vld == 1'b1) && (is_data1_low_p0 == 1'b1) && (ping_pong_ready0 == 1'b1))
@@ -374,13 +383,13 @@ begin
      end
    else if ((next_cmd_interface_id ==  1'b1) && //1 is the next interface 
             (input_is_cmd == 1'b1) &&           //first stage input is cmd
-            (egr_route_in_tvalid == 1'b1) &&    //there is a cmd at the first stage input
+            (egr_route_in_tvalid_s0 == 1'b1) &&    //there is a cmd at the first stage input
             ( (cmdflit1_vld == 1'b0) ||        //first stage is empty or second stage is pulling the other flit in this cycle.
                    ((ping_pong_ready1 == 1'b1) && (is_cmd_p1 == 1'b1)) 
             )                      
            )
      begin
-        cmdflit1_q   <= egr_route_in_tdata[511:256]; 
+        cmdflit1_q   <= egr_route_in_tdata_s0[511:256]; 
         cmdflit1_vld <= 1'b1;
      end
    else if ((cmdflit1_vld == 1'b1) && (is_cmd_p1 == 1'b1) && (ping_pong_ready1 == 1'b1))
@@ -399,13 +408,13 @@ begin
      end
    else if ((next_data_interface_id ==  1'b1) && //1 is the next interface 
             (input_is_data0 == 1'b1) &&         //first stage input is dataflit0
-            (egr_route_in_tvalid == 1'b1) &&    //there is a dataflit at the first stage input
+            (egr_route_in_tvalid_s0 == 1'b1) &&    //there is a dataflit at the first stage input
             ( (dataflit10h_vld == 1'b0)  ||  //first stage is _completely_ empty  or second stage is pulling the lower flit in this cycle.
                  ((ping_pong_ready1 == 1'b1) && (is_data0_high_p1 == 1'b1)) 
             )                      
            )
      begin
-        dataflit10h_q   <= egr_route_in_tdata[511:256]; 
+        dataflit10h_q   <= egr_route_in_tdata_s0[511:256]; 
         dataflit10h_vld <= 1'b1;
      end
    else if ((dataflit10h_vld == 1'b1) && (is_data0_high_p1 == 1'b1) && (ping_pong_ready1 == 1'b1))
@@ -424,13 +433,13 @@ begin
      end
    else if ((next_data_interface_id ==  1'b1) && //1 is the next interface 
             (input_is_data0 == 1'b1) &&         //first stage input is dataflit0
-            (egr_route_in_tvalid == 1'b1) &&    //there is a dataflit at the first stage input
+            (egr_route_in_tvalid_s0 == 1'b1) &&    //there is a dataflit at the first stage input
             ( (dataflit10l_vld == 1'b0) ||        //first stage is empty or second stage is pulling the lower flit in this cycle.
                  ((ping_pong_ready1 == 1'b1) && (is_data0_low_p1 == 1'b1)) 
             )                      
            )
      begin
-        dataflit10l_q   <= egr_route_in_tdata[255:0]; 
+        dataflit10l_q   <= egr_route_in_tdata_s0[255:0]; 
         dataflit10l_vld <= 1'b1;
      end
    else if ((dataflit10l_vld == 1'b1) && (is_data0_low_p1 == 1'b1) && (ping_pong_ready1 == 1'b1))
@@ -449,13 +458,13 @@ begin
      end
    else if ((next_data_interface_id ==  1'b1) && //1 is the next interface 
             (input_is_data1 == 1'b1) &&         //first stage input is dataflit0
-            (egr_route_in_tvalid == 1'b1) &&    //there is a dataflit at the first stage input
+            (egr_route_in_tvalid_s0 == 1'b1) &&    //there is a dataflit at the first stage input
             ( (dataflit11h_vld == 1'b0) ||        //first stage is empty or second stage is pulling the lower flit in this cycle.
                  ((ping_pong_ready1 == 1'b1) && (is_data1_high_p1 == 1'b1)) 
             )                      
            )
      begin
-        dataflit11h_q   <= egr_route_in_tdata[511:256]; 
+        dataflit11h_q   <= egr_route_in_tdata_s0[511:256]; 
         dataflit11h_vld <= 1'b1;
      end
    else if ((dataflit11h_vld == 1'b1) && (is_data1_high_p1 == 1'b1) && (ping_pong_ready1 == 1'b1))
@@ -474,13 +483,13 @@ begin
      end
    else if ((next_data_interface_id ==  1'b1) && //1 is the next interface 
             (input_is_data1 == 1'b1) &&         //first stage input is dataflit0
-            (egr_route_in_tvalid == 1'b1) &&    //there is a dataflit at the first stage input
+            (egr_route_in_tvalid_s0 == 1'b1) &&    //there is a dataflit at the first stage input
             ( (dataflit11l_vld == 1'b0) ||        //first stage is empty or second stage is pulling the lower flit in this cycle.
                  ((ping_pong_ready1 == 1'b1) && (is_data1_low_p1 == 1'b1)) 
             )                      
            )
      begin
-        dataflit11l_q   <= egr_route_in_tdata[255:0]; 
+        dataflit11l_q   <= egr_route_in_tdata_s0[255:0]; 
         dataflit11l_vld <= 1'b1;
      end
    else if ((dataflit11l_vld == 1'b1) && (is_data1_low_p1 == 1'b1) && (ping_pong_ready1 == 1'b1))

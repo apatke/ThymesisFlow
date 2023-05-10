@@ -104,9 +104,15 @@ wire           power_on_qsfp1_rout;
 wire  [519:0]  ocx_compute_egress_in_tdata;
 wire           ocx_compute_egress_in_tvalid;
 wire           ocx_compute_egress_in_tready;
-wire  [511:0]  ocx_compute_netflit_out_tdata;
-wire           ocx_compute_netflit_out_tvalid;
-wire           ocx_compute_netflit_out_tready;
+
+wire  [511:0]  ocx_compute_netflit_out_tdata0;
+wire           ocx_compute_netflit_out_tvalid0;
+wire           ocx_compute_netflit_out_tready0;
+
+wire  [511:0]  ocx_compute_netflit_out_tdata1;
+wire           ocx_compute_netflit_out_tvalid1;
+wire           ocx_compute_netflit_out_tready1;
+
 wire  [255:0]  clkcross0_egress_fifo_out_tdata;
 wire           clkcross0_egress_fifo_out_tvalid;
 wire           clkcross0_egress_fifo_out_tready;
@@ -382,11 +388,26 @@ dataflit_fifo TF_TLX_AFU_DATAFIFO
          ,.adapter_in_data_tvalid (ocx_compute_egress_in_tvalid)
          ,.adapter_in_data_tready (ocx_compute_egress_in_tready)
 
-         ,.adapter_out_tdata      (ocx_compute_netflit_out_tdata)
-         ,.adapter_out_tvalid     (ocx_compute_netflit_out_tvalid)
-         ,.adapter_out_tready     (ocx_compute_netflit_out_tready)
+         ,.adapter_out_tdata      (ocx_compute_netflit_out_tdata0)
+         ,.adapter_out_tvalid     (ocx_compute_netflit_out_tvalid0)
+         ,.adapter_out_tready     (ocx_compute_netflit_out_tready0)
 
        );
+
+axis_delay TF_COMPUTE_EGRESS_DELAY (
+
+          .clock                  (clock)
+          ,.reset_n                (reset_n)
+
+          ,.saxis_tdata  (ocx_compute_netflit_out_tdata0)
+          ,.saxis_tvalid (ocx_compute_netflit_out_tvalid0)
+          ,.saxis_tready (ocx_compute_netflit_out_tready0)
+
+          ,.maxis_tdata      (ocx_compute_netflit_out_tdata1)
+          ,.maxis_tvalid     (ocx_compute_netflit_out_tvalid1)
+          ,.maxis_tready     (ocx_compute_netflit_out_tready1)
+
+);
 
 thymesisflow_64B_32B_routing_egress TF_COMPUTE_ROUTING_EGR
       (
@@ -394,9 +415,9 @@ thymesisflow_64B_32B_routing_egress TF_COMPUTE_ROUTING_EGR
          .clock                     (clock)                   
         ,.reset_n                   (reset_n)
 
-        ,.egr_route_in_tdata         (ocx_compute_netflit_out_tdata)
-        ,.egr_route_in_tvalid        (ocx_compute_netflit_out_tvalid)
-        ,.egr_route_in_tready        (ocx_compute_netflit_out_tready)
+        ,.egr_route_in_tdata         (ocx_compute_netflit_out_tdata1)
+        ,.egr_route_in_tvalid        (ocx_compute_netflit_out_tvalid1)
+        ,.egr_route_in_tready        (ocx_compute_netflit_out_tready1)
 
         ,.egr_route_out_tdata0       (egr_out_tdata0)
         ,.egr_route_out_tvalid0      (egr_out_tvalid0)
